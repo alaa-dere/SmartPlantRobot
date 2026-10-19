@@ -5,19 +5,25 @@ venv/
 # Python cache
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
-# VS Code local settings
-.vscode/
+# Test and coverage files
+.coverage
+htmlcov/
 
 # Environment variables and secrets
 .env
 .env.*
+!.env.example
 
-# Test and coverage files
-.pytest_cache/
-.coverage
-htmlcov/
+# IDE settings
+.vscode/
+.idea/
 
-# Operating system files
+# Logs and temporary files
+*.log
+*.tmp
+
+# OS files
 .DS_Store
 Thumbs.db

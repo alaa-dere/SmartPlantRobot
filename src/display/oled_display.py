@@ -1,117 +1,272 @@
-from PIL import Image, ImageDraw, ImageFont
 
-try:
-    from luma.oled.device import sh1106  # type: ignore
-    from luma.core.interface.serial import i2c  # type: ignore
-    HAS_LUMA = True
-except ImportError:
-    HAS_LUMA = False
+import os
+import math
+import time
+import pygame
+
 
 class OLEDDisplay:
+    WIDTH = 800
+    HEIGHT = 480
+
+    COLORS = {
+        "HAPPY": (88, 205, 151),
+        "THIRSTY": (100, 167, 235),
+        "NEEDS_WATER": (75, 135, 220),
+        "HOT": (255, 150, 99),
+        "NEEDS_LIGHT": (175, 150, 225),
+        "SEARCHING": (95, 195, 215),
+        "SLEEPING": (90, 112, 170),
+        "WAKE_UP": (250, 173, 192),
+        "LISTENING": (105, 185, 225),
+        "TALKING": (96, 207, 155),
+        "ERROR": (235, 105, 115),
+    }
+
     def __init__(self):
-        self.has_hardware = False
-        
-        if HAS_LUMA:
-            try:
-                serial = i2c(port=1, address=0x3C)
-                self.device = sh1106(serial)
-                self.width = self.device.width
-                self.height = self.device.height
-                self.has_hardware = True
-            except Exception:
-                self.width, self.height = 128, 64
-        else:
-            self.width, self.height = 128, 64
-            
-        self.image = Image.new('1', (self.width, self.height))
-        self.draw = ImageDraw.Draw(self.image)
-        self.font = ImageFont.load_default()
+        pygame.init()
+
+        # Use the HDMI display
+        self.screen = pygame.display.set_mode(
+            (self.WIDTH, self.HEIGHT),
+            pygame.FULLSCREEN
+        )
+
+        pygame.display.set_caption("Smart Plant Robot - F03")
+        pygame.mouse.set_visible(False)
+
+        self.clock = pygame.time.Clock()
+
+        self.font = pygame.font.Font(None, 34)
+        self.title_font = pygame.font.Font(None, 42)
+
+        self.current_emotion = "HAPPY"
+        self.message = ""
+        self.start_time = time.monotonic()
+        self.running = True
+
+    def draw_eye(self, x, y, blink=False, pupil_offset=0):
+        WHITE = (255, 255, 255)
+        DARK = (28, 48, 61)
+
+        if blink:
+            pygame.draw.line(
+                self.screen, DARK,
+                (x - 58, y),
+                (x + 58, y),
+                10
+            )
+            return
+
+        pygame.draw.ellipse(
+            self.screen, WHITE,
+            (x - 65, y - 80, 130, 160)
+        )
+
+        pygame.draw.ellipse(
+            self.screen, DARK,
+            (x - 24 + pupil_offset, y - 36, 48, 72)
+        )
+
+        pygame.draw.circle(
+            self.screen, WHITE,
+            (x - 8 + pupil_offset, y - 22),
+            11
+        )
+
+    def draw_mouth(self, emotion, t):
+        DARK = (28, 48, 61)
+        WHITE = (255, 255, 255)
+
+        if emotion in ("HAPPY", "WAKE_UP", "SEARCHING"):
+            pygame.draw.arc(
+                self.screen, DARK,
+                (310, 200, 180, 115),
+                math.pi, 2 * math.pi,
+                10
+            )
+
+        elif emotion == "TALKING":
+            opening = int(25 + 22 * abs(math.sin(t * 7)))
+
+            pygame.draw.ellipse(
+                self.screen, DARK,
+                (360, 255, 80, opening + 20)
+            )
+
+        elif emotion in ("THIRSTY", "NEEDS_WATER"):
+            pygame.draw.arc(
+                self.screen, DARK,
+                (330, 270, 140, 80),
+                0, math.pi,
+                10
+            )
+
+        elif emotion == "HOT":
+            pygame.draw.ellipse(
+                self.screen, DARK,
+                (365, 255, 70, 88)
+            )
+
+            pygame.draw.ellipse(
+                self.screen, (245, 110, 130),
+                (377, 305, 46, 32)
+            )
+
+        elif emotion in ("NEEDS_LIGHT", "LISTENING"):
+            pygame.draw.line(
+                self.screen, DARK,
+                (345, 290), (455, 290), 9
+            )
+
+        elif emotion == "SLEEPING":
+            pygame.draw.arc(
+                self.screen, DARK,
+                (365, 260, 70, 35),
+                math.pi, 2 * math.pi, 7
+            )
+
+        elif emotion == "ERROR":
+            pygame.draw.line(
+                self.screen, DARK,
+                (365, 260), (435, 320), 10
+            )
+
+            pygame.draw.line(
+                self.screen, DARK,
+                (435, 260), (365, 320), 10
+            )
+
+    def draw_tears(self, emotion, t):
+        if emotion not in ("THIRSTY", "NEEDS_WATER"):
+            return
+
+        BLUE = (48, 125, 230)
+
+        amount = 2 if emotion == "NEEDS_WATER" else 1
+
+        for i in range(amount):
+            offset = int((t * 50 + i * 45) % 90)
+
+            for x in (240, 560):
+                pygame.draw.ellipse(
+                    self.screen, BLUE,
+                    (x, 250 + offset, 18, 32)
+                )
+
+    def draw_sleeping(self):
+        DARK = (28, 48, 61)
+
+        for x in (260, 540):
+            pygame.draw.arc(
+                self.screen, DARK,
+                (x - 65, 160, 130, 75),
+                0, math.pi, 9
+            )
+
+        text = self.title_font.render(
+            "Zzz", True, (255, 255, 255)
+        )
+        self.screen.blit(text, (635, 80))
+
+    def draw_error_eyes(self):
+        DARK = (28, 48, 61)
+
+        for x in (260, 540):
+            pygame.draw.line(
+                self.screen, DARK,
+                (x - 45, 150), (x + 45, 240), 12
+            )
+
+            pygame.draw.line(
+                self.screen, DARK,
+                (x + 45, 150), (x - 45, 240), 12
+            )
 
     def show_emotion(self, emotion_key, message=""):
-        self.draw.rectangle((0, 0, self.width, self.height), outline=0, fill=0)
+        if emotion_key != self.current_emotion:
+            self.current_emotion = emotion_key
+            self.start_time = time.monotonic()
 
-        # 1. HAPPY
-        if emotion_key == "HAPPY":
-            self.draw.arc((20, 15, 45, 35), 180, 360, fill=255)
-            self.draw.arc((83, 15, 108, 35), 180, 360, fill=255)
-            self.draw.arc((50, 30, 78, 45), 0, 180, fill=255)
+        self.message = message
+        self.render()
 
-        # 2. THIRSTY
-        elif emotion_key == "THIRSTY":
-            self.draw.line((20, 20, 45, 30), fill=255)
-            self.draw.line((108, 20, 83, 30), fill=255)
-            self.draw.arc((50, 35, 78, 48), 180, 360, fill=255)
+    def render(self):
+        emotion = self.current_emotion
+        t = time.monotonic() - self.start_time
 
-        # 3. NEEDS_WATER
-        elif emotion_key == "NEEDS_WATER":
-            self.draw.line((20, 20, 45, 30), fill=255)
-            self.draw.line((108, 20, 83, 30), fill=255)
-            self.draw.arc((50, 35, 78, 48), 180, 360, fill=255)
-            self.draw.line((25, 32, 25, 42), fill=255)
-            self.draw.line((103, 32, 103, 42), fill=255)
+        bg = self.COLORS.get(emotion, (80, 180, 140))
+        self.screen.fill(bg)
 
-        # 4. HOT
-        elif emotion_key == "HOT":
-            self.draw.line((20, 25, 45, 25), fill=255)
-            self.draw.line((83, 25, 108, 25), fill=255)
-            self.draw.ellipse((58, 32, 70, 44), outline=255, fill=255)
+        DARK = (28, 48, 61)
 
-        # 5. NEEDS_LIGHT
-        elif emotion_key == "NEEDS_LIGHT":
-            self.draw.ellipse((22, 18, 42, 38), outline=255)
-            self.draw.ellipse((85, 18, 105, 38), outline=255)
-            self.draw.line((50, 40, 78, 40), fill=255)
+        # Automatic blinking every 4 seconds
+        blink = (t % 4.0) < 0.15
 
-        # 6. SEARCHING
-        elif emotion_key == "SEARCHING":
-            self.draw.ellipse((25, 15, 45, 35), outline=255, fill=0)
-            self.draw.ellipse((35, 20, 43, 28), outline=255, fill=255)
-            self.draw.ellipse((83, 15, 103, 35), outline=255, fill=0)
-            self.draw.ellipse((93, 20, 101, 28), outline=255, fill=255)
+        if emotion == "SLEEPING":
+            self.draw_sleeping()
 
-        # 7. SLEEPING
-        elif emotion_key == "SLEEPING":
-            self.draw.line((20, 25, 45, 25), fill=255)
-            self.draw.line((83, 25, 108, 25), fill=255)
-            self.draw.text((100, 8), "Zzz", font=self.font, fill=255)
+        elif emotion == "ERROR":
+            self.draw_error_eyes()
 
-        # 8. WAKE_UP
-        elif emotion_key == "WAKE_UP":
-            self.draw.ellipse((18, 12, 48, 42), outline=255, fill=255)
-            self.draw.ellipse((80, 12, 110, 42), outline=255, fill=255)
-            self.draw.ellipse((58, 35, 70, 45), outline=255, fill=0)
+        else:
+            pupil_offset = 0
 
-        # 9. LISTENING
-        elif emotion_key == "LISTENING":
-            self.draw.ellipse((22, 18, 42, 38), outline=255, fill=255)
-            self.draw.ellipse((85, 18, 105, 38), outline=255, fill=255)
-            self.draw.arc((110, 15, 125, 35), 270, 90, fill=255)
+            if emotion == "SEARCHING":
+                pupil_offset = int(25 * math.sin(t * 2.5))
 
-        # 10. TALKING
-        elif emotion_key == "TALKING":
-            self.draw.arc((20, 15, 45, 35), 180, 360, fill=255)
-            self.draw.arc((83, 15, 108, 35), 180, 360, fill=255)
-            self.draw.chord((52, 28, 76, 46), 0, 180, fill=255)
+            self.draw_eye(
+                260, 190, blink, pupil_offset
+            )
+            self.draw_eye(
+                540, 190, blink, pupil_offset
+            )
 
-        # 11. ERROR
-        elif emotion_key == "ERROR":
-            self.draw.line((20, 15, 45, 35), fill=255)
-            self.draw.line((20, 35, 45, 15), fill=255)
-            self.draw.line((83, 15, 108, 35), fill=255)
-            self.draw.line((83, 35, 108, 15), fill=255)
+        self.draw_mouth(emotion, t)
+        self.draw_tears(emotion, t)
 
-        if message:
-            self.draw.text((5, 52), message, font=self.font, fill=255)
+        if emotion == "LISTENING":
+            pygame.draw.arc(
+                self.screen, DARK,
+                (650, 160, 75, 100),
+                -1.2, 1.2, 8
+            )
 
-        if self.has_hardware:
-            try:
-                self.device.display(self.image)
-            except Exception:
-                pass
+        # Message at bottom
+        if self.message:
+            text = self.font.render(
+                self.message[:55],
+                True,
+                (255, 255, 255)
+            )
+
+            rect = text.get_rect(
+                center=(self.WIDTH // 2, 430)
+            )
+
+            self.screen.blit(text, rect)
+
+        pygame.display.flip()
+
+    def update(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.running = False
+
+        if self.running:
+            self.render()
+            self.clock.tick(30)
+
+        return self.running
 
     def clear(self):
-        if self.has_hardware:
-            try:
-                self.device.clear()
-            except Exception:
-                pass
+        self.screen.fill((0, 0, 0))
+        pygame.display.flip()
+
+    def close(self):
+        pygame.mouse.set_visible(True)
+        pygame.quit()
