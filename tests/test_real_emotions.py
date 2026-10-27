@@ -29,7 +29,7 @@ SOIL_WET_THRESHOLD = 2050
 # ======================================
 
 # Temporary thresholds
-TEMP_HOT_THRESHOLD = 30.0
+TEMP_HOT_THRESHOLD = 25.0
 TEMP_NORMAL_THRESHOLD = 28.0
 
 
