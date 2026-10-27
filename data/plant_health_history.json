@@ -1,0 +1,32 @@
+[
+    {
+        "timestamp": "2026-10-20T15:41:38.865059",
+        "image_path": "test_day_1.png",
+        "analysis": {
+            "status": "ANALYZED",
+            "green_pixels": 72000,
+            "yellow_pixels": 8000,
+            "yellow_percentage": 10.0,
+            "message": "Color analysis completed."
+        },
+        "comparison": null
+    },
+    {
+        "timestamp": "2026-10-20T15:41:38.879245",
+        "image_path": "test_day_2.png",
+        "analysis": {
+            "status": "ANALYZED",
+            "green_pixels": 48000,
+            "yellow_pixels": 32000,
+            "yellow_percentage": 40.0,
+            "message": "Color analysis completed."
+        },
+        "comparison": {
+            "status": "COMPARED",
+            "previous_yellow_percentage": 10.0,
+            "current_yellow_percentage": 40.0,
+            "difference_percentage_points": 30.0,
+            "message": "Yellow regions increased."
+        }
+    }
+]
